@@ -24,12 +24,21 @@ public class ServerController implements Initializable {
 
 	@Override
 	public void initialize(URL arg0, ResourceBundle arg1) {
-		server = new Server(this);
-		
+		initServer();
+
 		primaryStage.setOnCloseRequest(e -> {
-				server.closeAllSocket();
-				server.interrupt();
+			server.closeAllSocket();
+			server.interrupt();
 		});
+	}
+
+	private void initServer() {
+		server = new Server(this);
+		server.start();
+		Screen.appendText("Đã mở server.\n");
+		Screen.appendText("Đang chờ kết nối từ client...\n");
+		startServerBtn.setText("Close Server");
+		onServer = true;
 	}
 
 	public void handleStartServer(MouseEvent event) {

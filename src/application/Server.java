@@ -6,15 +6,18 @@ import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
 
-public class Server extends Thread{
+import mysql.ChatAppConnectorDB;
+
+public class Server extends Thread {
 
 	private static final int SERVER_PORT = 5151;
+	private static List<ServerConnection> listClients;
+	
 	private ServerController serverController;
 	private ServerSocket serverSocket;
 	private Socket socket;
-	private static List<ServerConnection> listClients;
 	public boolean running = true;
-
+	
 	public Server(ServerController serverController) {
 		this.serverController = serverController;
 		initServer();
@@ -23,14 +26,14 @@ public class Server extends Thread{
 	public static List<ServerConnection> getListClientThreads() {
 		return listClients == null ? new ArrayList<>() : listClients;
 	}
-	
+
 	public void closeAllSocket() {
 		if (listClients.size() > 0) {
 			for (ServerConnection serverConnection : listClients) {
 				serverConnection.close();
 			}
-		} 
-		
+		}
+
 		running = false;
 		try {
 			serverSocket.close();
@@ -43,6 +46,7 @@ public class Server extends Thread{
 		try {
 			serverSocket = new ServerSocket(SERVER_PORT);
 			listClients = new ArrayList<>();
+			ChatAppConnectorDB.getInstance();
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -58,11 +62,11 @@ public class Server extends Thread{
 				listClients.add(ct);
 				serverController.Screen.appendText("1 Client đã kết nối tới server.\n");
 			} catch (IOException e) {
-				e.printStackTrace();
+				System.out.println("close socket");
 			}
 		}
 	}
-	
+
 	public ServerSocket getServerSocket() {
 		return serverSocket;
 	}
