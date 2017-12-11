@@ -7,11 +7,9 @@ import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.json.JSONArray;
 import org.json.JSONObject;
 
 import mysql.ChatAppConnectorDB;
-import mysql.StructureJSON;
 import pojo.FlagConnection;
 import pojo.Group;
 import pojo.Relationship;
@@ -144,6 +142,7 @@ public class ServerConnection extends Thread {
 	private void requestGetRelationship() {
 		String result = FlagConnection.GET_RELATIONSHIP + "|";
 		int userId = user.getId();
+		
 		Relationship relationship = connectorDB.getRelationshipByUserID(userId);
 		if (relationship != null) {
 			List<Integer> listGroupsID = relationship.getListGroupsID();

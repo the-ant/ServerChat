@@ -5,7 +5,7 @@ import java.util.List;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import mysql.StructureJSON;
+import mysql.StructureDB;
 import pojo.Group;
 import pojo.User;
 
@@ -30,11 +30,11 @@ public class JSONUtils {
 
 	public static JSONObject createGroupJSONObj(Group group) {
 		JSONObject item = new JSONObject();
-		item.put(StructureJSON.GROUP_ID, group.getId());
-		item.put(StructureJSON.GROUP_NAME, group.getName());
-		item.put(StructureJSON.GROUP_USER_ID_CREATED, group.getUserIDCreated());
-		item.put(StructureJSON.GROUP_IS_CHAT_GROUP, group.isChatGroup());
-		item.put(StructureJSON.GROUP_LIST_USERS, group.getListUserIDStr());
+		item.put(StructureDB.GROUP_ID, group.getId());
+		item.put(StructureDB.GROUP_NAME, group.getName());
+		item.put(StructureDB.GROUP_USER_ID_CREATED, group.getUserIDCreated());
+		item.put(StructureDB.GROUP_IS_CHAT_GROUP, group.isChatGroup());
+		item.put(StructureDB.GROUP_LIST_USERS, group.getListUserIDStr());
 		return item;
 	}
 
@@ -48,9 +48,9 @@ public class JSONUtils {
 
 	public static JSONObject createUserJSONObj(User user) {
 		JSONObject item = new JSONObject();
-		item.put(StructureJSON.USER_ID, user.getId());
-		item.put(StructureJSON.USERNAME, user.getUsername());
-		item.put(StructureJSON.ONLINE, user.isOnline());
+		item.put(StructureDB.USER_ID, user.getId());
+		item.put(StructureDB.USER_FULLNAME, user.getFullname());
+		item.put(StructureDB.ONLINE, user.isOnline());
 		return item;
 	}
 }

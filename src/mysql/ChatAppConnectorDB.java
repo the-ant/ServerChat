@@ -136,13 +136,13 @@ public class ChatAppConnectorDB {
 		try {
 			ResultSet rs = mStatement.executeQuery(query);
 			while (rs.next()) {
-				String name = rs.getString(StructureDB.USERNAME);
+				String fullname = rs.getString(StructureDB.USER_FULLNAME);
 				boolean online = rs.getBoolean(StructureDB.ONLINE);
 
 				System.out.println("----------getUser----------");
-				System.out.println("name: " + name);
+				System.out.println("name: " + fullname);
 				System.out.println("online: " + online);
-				result = new User(id, name, online);
+				result = new User(id, fullname, online);
 			}
 		} catch (SQLException e) {
 			e.printStackTrace();

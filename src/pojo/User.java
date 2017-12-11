@@ -25,9 +25,9 @@ public class User {
 		this.online = online;
 	}
 
-	public User(int id, String username, boolean online) {
+	public User(int id, String fullname, boolean online) {
 		this.id = id;
-		this.username = username;
+		this.fullname = fullname;
 		this.online = online;
 	}
 
