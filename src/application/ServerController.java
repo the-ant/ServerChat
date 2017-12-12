@@ -31,6 +31,9 @@ public class ServerController implements Initializable {
 				server.interrupt();
 		});
 	}
+	public boolean getOnServer() {
+		return this.onServer;
+	}
 
 	public void handleStartServer(MouseEvent event) {
 		if (server != null) {
@@ -39,7 +42,6 @@ public class ServerController implements Initializable {
 					server.start();
 				Screen.appendText("Đã mở server.\n");
 				Screen.appendText("Đang chờ kết nối từ client...\n");
-
 				startServerBtn.setText("Close Server");
 				onServer = true;
 			} else {
@@ -50,7 +52,7 @@ public class ServerController implements Initializable {
 				startServerBtn.setText("Start Server");
 				onServer = false;
 			}
+			server.connectDatabase();
 		}
 	}
-
 }

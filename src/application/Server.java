@@ -6,12 +6,13 @@ import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
 
+import application.db.DatabaseConnection;
+
 public class Server extends Thread{
 
-	private static final int SERVER_PORT = 5151;
 	private ServerController serverController;
 	private ServerSocket serverSocket;
-	private Socket socket;
+	private Socket client;
 	private static List<ServerConnection> listClients;
 	public boolean running = true;
 
@@ -41,28 +42,41 @@ public class Server extends Thread{
 
 	private void initServer() {
 		try {
-			serverSocket = new ServerSocket(SERVER_PORT);
+			serverSocket = new ServerSocket(Constants.SERVER_PORT);
 			listClients = new ArrayList<>();
+			
 		} catch (IOException e) {
 			e.printStackTrace();
+		}
+	}
+	public void connectDatabase() {
+		if (serverController.getOnServer()) {
+			DatabaseConnection.getInstance().connectDatabase();
+			if (DatabaseConnection.getInstance().getConnection() != null) {
+				serverController.Screen.appendText("Connected database. \n");
+			} else {
+				serverController.Screen.appendText("Error connect with database. \n");
+			}
+		} else {
+			DatabaseConnection.getInstance().disconnectDatabase();
+			serverController.Screen.appendText("Disconnected database. \n");
 		}
 	}
 
 	@Override
 	public void run() {
 		while (running) {
-			try {
-				socket = serverSocket.accept();
-				ServerConnection ct = new ServerConnection(socket, serverController);
-				ct.start();
-				listClients.add(ct);
-				serverController.Screen.appendText("1 Client đã kết nối tới server.\n");
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
+				try {
+					client = serverSocket.accept();
+					ServerConnection ct = new ServerConnection(client, serverController);
+					ct.start();
+					listClients.add(ct);
+					serverController.Screen.appendText("1 Client đã kết nối tới server.\n");
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
 		}
 	}
-	
 	public ServerSocket getServerSocket() {
 		return serverSocket;
 	}
