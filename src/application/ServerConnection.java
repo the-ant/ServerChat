@@ -141,9 +141,6 @@ public class ServerConnection extends Thread {
 			if (msg.contains("register")) {
 				return 5;
 			}
-			if (msg.contains("listOfMyFriends")) {
-				return 6;
-			}
 		}
 		return 0;
 	}
@@ -165,7 +162,8 @@ public class ServerConnection extends Thread {
 				updateStatusOnline(user.getUsername());
 				serverController.Screen.appendText(user.getUsername() + " dang nhap thanh cong. \n");
 				// login successfully
-				sendToCurrentClient(user.getUserId() + "-" + user.getFullName() + ":lgResult-true");
+				String relationships = getListInfoOfFriends(user.getUserId());
+				sendToCurrentClient("lgResult-true:" + user.getUserId() + "-" + user.getFullName() + "-" + relationships);
 			} else {
 				serverController.Screen.appendText(" Dang nhap khong thanh cong. \n");
 				sendToCurrentClient("lgResult-false");
@@ -183,7 +181,8 @@ public class ServerConnection extends Thread {
 		if (exUser != null) {
 			if (handleLoginAction(exUser, password)) {
 				updateStatusOnline(username);
-				sendToCurrentClient("lgResult-true:" + exUser.getUserId() + "-" + exUser.getFullName());
+				String relationships = getListInfoOfFriends(exUser.getUserId());
+				sendToCurrentClient("lgResult-true:" + exUser.getUserId() + "-" + exUser.getFullName() + "-" + relationships);
 			} else {
 				sendToCurrentClient("lgResult-false");
 			}
@@ -267,7 +266,8 @@ public class ServerConnection extends Thread {
 				if (online) {
 					formatOnline = 1;
 				}
-				int id = Integer.parseInt(arrUserIds[i]);
+				int id = Integer.parseInt(arrUserIds[i++]);
+				System.out.println("id => " + id);
 				users.add(new Users(id, fullname, formatOnline));
 			}
 			return users;
@@ -285,15 +285,16 @@ public class ServerConnection extends Thread {
 		return null;
 	}
 
-	private void getListInfoOfFriends(int userId) {
+	private String getListInfoOfFriends(int userId) {
 		Relationship relationships = getRelationships(userId);
 		if (relationships != null) {
-			List<Integer> listGroupIds = relationships.getListFriendsID();
+			List<Integer> listGroupIds = relationships.getListGroupsID();
 			List<Users> listFriends = getListFriendsById(relationships.getListUserIds());
 			List<Group> listGroups = getListGroupsByID(listGroupIds);
 			JSONObject obj = JSONUtils.createJSONObject(listFriends, listGroups);
-			sendToCurrentClient("listOFYourFriends:" + obj.toString());
+			return obj.toString();
 		}
+		return null;
 	}
 
 	private List<Group> getListGroupsByID(List<Integer> listGroupsID) {
@@ -369,11 +370,6 @@ public class ServerConnection extends Thread {
 						handleRegisterForm(msg);
 						break;
 					/* Main controller handler. */
-					case 6:
-						if (user != null) {
-							getListInfoOfFriends(user.getUserId());
-						}
-						break;
 					default:
 						break;
 					}
