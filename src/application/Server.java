@@ -4,7 +4,11 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+
+import org.apache.commons.collections4.map.HashedMap;
 
 import mysql.ChatAppConnectorDB;
 
@@ -12,6 +16,7 @@ public class Server extends Thread {
 
 	private static final int SERVER_PORT = 5151;
 	private static List<ServerConnection> listClients;
+	private static Map<Integer, ServerConnection> mapClientConnections;
 	
 	private ServerController serverController;
 	private ServerSocket serverSocket;
@@ -25,6 +30,10 @@ public class Server extends Thread {
 
 	public static List<ServerConnection> getListClientThreads() {
 		return listClients == null ? new ArrayList<>() : listClients;
+	}
+
+	public static Map<Integer, ServerConnection> getMapClientThreads() {
+		return listClients == null ? new HashMap<Integer, ServerConnection>() : mapClientConnections;
 	}
 
 	public void closeAllSocket() {

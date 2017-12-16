@@ -1,6 +1,7 @@
 package mysql;
 
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -69,23 +70,86 @@ public class ChatAppConnectorDB {
 		return result;
 	}
 
+	public List<Group> getListGroupsByID(String listGroupsIDStr) {
+		List<Group> result = new ArrayList<Group>();
+		try {
+			ResultSet rs = mStatement.executeQuery(MySQLQuery.GET_LIST_GROUP + listGroupsIDStr + ")");
+			while (rs.next()) {
+				
+				int id = rs.getInt(StructureDB.GROUP_ID);
+				String name = rs.getString(StructureDB.GROUP_NAME);
+				int userIDCreated = rs.getInt(StructureDB.GROUP_USER_ID_CREATED);
+				boolean isChatGroup = rs.getBoolean(StructureDB.GROUP_IS_CHAT_GROUP);
+				String usersStr = rs.getString(StructureDB.GROUP_LIST_USERS);
+				
+				List<Integer> listUsersID = addAllIDs(usersStr);
+				Group group = new Group(id, name, userIDCreated, isChatGroup, listUsersID);
+				
+				result.add(group);
+			}
+		} catch (Exception ex) {
+			ex.printStackTrace();
+		}
+		return result;
+	}
+
+	public List<User> getListFriendsByID(String friendIdsStr) {
+		List<User> result = new ArrayList<User>();
+		try {
+			ResultSet rs = mStatement.executeQuery(MySQLQuery.GET_LIST_INFO_USER_BY_USERID + friendIdsStr + ")");
+			while (rs.next()) {
+				int id = rs.getInt(StructureDB.USER_ID);
+				String fullname = rs.getString(StructureDB.USER_FULLNAME);
+				boolean online = rs.getBoolean(StructureDB.ONLINE);
+
+				result.add(new User(id, fullname, online));
+			}
+		} catch (Exception ex) {
+			ex.printStackTrace();
+		}
+		return result;
+	}
+
+	public User checkValidUsername(String username) {
+		PreparedStatement preStatement = null;
+		User user = null;
+
+		try {
+			preStatement = mConnection.prepareStatement(MySQLQuery.GET_CLIENT_BY_USERNAME);
+			preStatement.setString(1, username);
+			ResultSet result = preStatement.executeQuery();
+
+			while (result.next()) {
+				user = new User(result.getInt(1), result.getString(2), result.getString(3), result.getString(4),
+						result.getBoolean(5));
+			}
+		} catch (SQLException e) {
+			e.printStackTrace();
+		} finally {
+			if (preStatement != null) {
+				try {
+					preStatement.close();
+				} catch (SQLException e) {
+					e.printStackTrace();
+				}
+			}
+		}
+		return user;
+	}
+
 	public Group getGroupByID(int id) {
 		Group result = null;
 
 		String query = "Select * from " + StructureDB.TABLE_GROUPS + " where " + StructureDB.GROUP_ID + " = " + id;
-		ResultSet rs = null;
 		try {
-			rs = mStatement.executeQuery(query);
+			ResultSet rs = mStatement.executeQuery(query);
 			while (rs.next()) {
 				String name = rs.getString(StructureDB.GROUP_NAME);
 				int userIDCreated = rs.getInt(StructureDB.GROUP_USER_ID_CREATED);
 				boolean isChatGroup = rs.getBoolean(StructureDB.GROUP_IS_CHAT_GROUP);
 				String usersStr = rs.getString(StructureDB.GROUP_LIST_USERS);
 
-				List<Integer> listUsersID = new ArrayList<>();
-				for (String e : usersStr.split(",")) {
-					listUsersID.add(Integer.parseInt(e));
-				}
+				List<Integer> listUsersID = addAllIDs(usersStr);
 
 				result = new Group(id, name, userIDCreated, isChatGroup, listUsersID);
 				System.out.println("----------getGroupByID----------");
@@ -95,37 +159,6 @@ public class ChatAppConnectorDB {
 			}
 		} catch (SQLException e) {
 			e.printStackTrace();
-			System.out.println(query);
-		}
-		return result;
-	}
-
-	public User getUserForLogin(String username, String password) {
-		System.out.println("--> Request login: " + username + " - " + password);
-		User result = null;
-		String query = "Select * from " + StructureDB.TABLE_USERS + " where " + StructureDB.USERNAME + " = '" + username
-				+ "' and " + StructureDB.PASSWORD + " = '" + password + "'";
-
-		System.out.println("-> Query: " + query);
-		try {
-			ResultSet rs = mStatement.executeQuery(query);
-			while (rs.next()) {
-				int id = rs.getInt(StructureDB.USER_ID);
-				String name = rs.getString(StructureDB.USERNAME);
-				boolean online = rs.getBoolean(StructureDB.ONLINE);
-
-				result = new User();
-				result.setId(id);
-				result.setUsername(name);
-				result.setOnline(online);
-
-				System.out.println("----------getUser----------");
-				System.out.println("name: " + name);
-				System.out.println("online: " + online);
-			}
-		} catch (SQLException e) {
-			e.printStackTrace();
-			System.out.println(query);
 		}
 		return result;
 	}
@@ -151,100 +184,126 @@ public class ChatAppConnectorDB {
 		return result;
 	}
 
-	public Relationship getRelationshipByUserID(int id) {
+	public Relationship getRelationshipByUserID(int userId) {
 		Relationship result = null;
-		String query = "Select * from " + StructureDB.TABLE_RELATIONSHIP + " where " + StructureDB.RELATIONSHIP_USER_ID
-				+ " = " + id;
+		PreparedStatement preStatement = null;
 		try {
-			ResultSet rs = mStatement.executeQuery(query);
+			preStatement = mConnection.prepareStatement(MySQLQuery.GET_LIST_FRIENDS_BY_USERID);
+			preStatement.setInt(1, userId);
+			ResultSet rs = preStatement.executeQuery();
 			while (rs.next()) {
 				String friendsStr = rs.getString(StructureDB.RELATIONSHIP_LIST_FRIENDS);
 				String groupsStr = rs.getString(StructureDB.RELATIONSHIP_LIST_GROUPS);
 
 				System.out.println("----------getRelationshipByUserID----------");
-				List<Integer> listFriendsID = new ArrayList<>();
-				for (String e : friendsStr.split(",")) {
-					System.out.println("friend: " + e);
-					listFriendsID.add(Integer.parseInt(e));
-				}
+				List<Integer> listFriendsID = addAllIDs(friendsStr);
+				List<Integer> listGroupsID = addAllIDs(groupsStr);
 
-				List<Integer> listGroupsID = new ArrayList<>();
-				for (String e : groupsStr.split(",")) {
-					System.out.println("group: " + e);
-					listGroupsID.add(Integer.parseInt(e));
-				}
-
-				result = new Relationship(id, listFriendsID, listGroupsID);
-				System.out.println("user_id: " + id);
+				result = new Relationship(userId, listFriendsID, listGroupsID);
+				System.out.println("user_id: " + userId);
 				System.out.println("friends: " + friendsStr);
 				System.out.println("groups: " + groupsStr);
 			}
+			preStatement.close();
 		} catch (SQLException e) {
 			e.printStackTrace();
-			System.out.println(query);
 		}
 		return result;
 	}
 
-	public void insertMessage(Message msg) {
-		String insert = "Insert into " + StructureDB.TABLE_MESSAGE + " (" + StructureDB.MESSAGE_GROUP_ID + ", "
-				+ StructureDB.MESSAGE + ", " + StructureDB.MESSAGE_USER_ID + ", " + StructureDB.MESSAGE_DATE_TIME + ") "
-				+ " values (" + msg.getGroupID() + ", '" + msg.getMessage() + "', " + msg.getUserID() + ", '"
-				+ DateTimeUtils.formatDateToStringDB(msg.getDate()) + "') ";
-
-		int rowCount = 0;
+	public void updateStatusOnline(String username, boolean online) {
+		PreparedStatement preStatement = null;
 		try {
-			rowCount = mStatement.executeUpdate(insert);
-		} catch (SQLException e) {
-			e.printStackTrace();
-			System.out.println(insert);
+			preStatement = mConnection.prepareStatement(MySQLQuery.UPDATE_STATUS_ONLINE);
+			preStatement.setInt(1, online ? 1 : 0);
+			preStatement.setString(2, username);
+			preStatement.executeUpdate();
+			preStatement.close();
+		} catch (SQLException ex) {
+			ex.printStackTrace();
+		} finally {
+			if (preStatement != null) {
+				try {
+					preStatement.close();
+				} catch (SQLException e) {
+					e.printStackTrace();
+				}
+			}
 		}
-		System.out.println("Row Count affected = " + rowCount);
 	}
 
-	public void insertUser(User user) {
-		String insert = "Insert into " + StructureDB.TABLE_USERS + " (" + StructureDB.USERNAME + ", "
-				+ StructureDB.PASSWORD + ", " + StructureDB.ONLINE + ") " + " values ('" + user.getUsername() + "', '"
-				+ user.getPassword() + "', " + user.isOnline() + ") ";
-
-		int rowCount = 0;
+	public void addNewUser(String username, String password, String fullName) {
+		PreparedStatement preStatement = null;
 		try {
-			rowCount = mStatement.executeUpdate(insert);
+			preStatement = mConnection.prepareStatement(MySQLQuery.INSERT_NEW_USER);
+			preStatement.setString(1, username);
+			preStatement.setString(2, password);
+			preStatement.setString(3, fullName);
+			preStatement.setInt(4, 1);
+			preStatement.executeUpdate();
+			preStatement.close();
+		} catch (SQLException ex) {
+			ex.printStackTrace();
+		} finally {
+			if (preStatement != null) {
+				try {
+					preStatement.close();
+				} catch (SQLException e) {
+					e.printStackTrace();
+				}
+			}
+		}
+	}
+
+	public void insertMessage(int groupId, int senderId, String msg, Date date) {
+		PreparedStatement preparedStatement = null;
+		try {
+			preparedStatement = mConnection.prepareStatement(MySQLQuery.INSERT_NEW_MESSAGE);
+			preparedStatement.setInt(1, groupId);
+			preparedStatement.setString(2, msg);
+			preparedStatement.setInt(3, senderId);
+			preparedStatement.setString(4, DateTimeUtils.formatDateToStringDB(date));
+
+			preparedStatement.executeUpdate();
+			preparedStatement.close();
 		} catch (SQLException e) {
 			e.printStackTrace();
-			System.out.println(insert);
 		}
-		System.out.println("Row Count affected = " + rowCount);
 	}
 
 	public void insertGroup(Group group) {
-		String insert = "Insert into " + StructureDB.TABLE_GROUPS + " (" + StructureDB.GROUP_NAME + ", "
-				+ StructureDB.GROUP_USER_ID_CREATED + ", " + StructureDB.GROUP_LIST_USERS + ") " + " values ('"
-				+ group.getName() + "', " + group.getUserIDCreated() + ", '" + group.getListUserIDStr() + "')";
-
-		int rowCount = 0;
+		PreparedStatement preparedStatement = null;
 		try {
-			rowCount = mStatement.executeUpdate(insert);
-		} catch (SQLException e) {
-			e.printStackTrace();
-			System.out.println(insert);
+			preparedStatement = mConnection.prepareStatement(MySQLQuery.INSERT_GROUP);
+			preparedStatement.setString(1, group.getName());
+			preparedStatement.setInt(2, group.getUserIDCreated());
+			preparedStatement.setBoolean(3, group.isChatGroup());
+			preparedStatement.setString(4, group.getListUserIDStr());
+			preparedStatement.executeUpdate();
+			preparedStatement.close();
+		} catch (SQLException e1) {
+			e1.printStackTrace();
 		}
-		System.out.println("Row Count affected = " + rowCount);
 	}
 
 	public void insertRelationship(Relationship relationship) {
-		String insert = "Insert into " + StructureDB.TABLE_RELATIONSHIP + " (" + StructureDB.RELATIONSHIP_USER_ID + ", "
-				+ StructureDB.RELATIONSHIP_LIST_FRIENDS + ", " + StructureDB.RELATIONSHIP_LIST_GROUPS + ") "
-				+ " values (" + relationship.getUserID() + ", '" + relationship.getUserIDStr() + "', '"
-				+ relationship.getListGroupsIDStr() + "')";
-
-		int rowCount = 0;
+		PreparedStatement preparedStatement = null;
 		try {
-			rowCount = mStatement.executeUpdate(insert);
-		} catch (SQLException e) {
-			e.printStackTrace();
-			System.out.println(insert);
+			preparedStatement = mConnection.prepareStatement(MySQLQuery.INSERT_RELATIONSHIP);
+			preparedStatement.setInt(1, relationship.getUserID());
+			preparedStatement.setString(2, relationship.getUserIDStr());
+			preparedStatement.setString(3, relationship.getListGroupsIDStr());
+			preparedStatement.executeUpdate();
+			preparedStatement.close();
+		} catch (SQLException e1) {
+			e1.printStackTrace();
 		}
-		System.out.println("Row Count affected = " + rowCount);
+	}
+
+	private List<Integer> addAllIDs(String idsStr) {
+		List<Integer> result = new ArrayList<>();
+		for (String e : idsStr.split(","))
+			result.add(Integer.parseInt(e));
+		return result;
 	}
 }
