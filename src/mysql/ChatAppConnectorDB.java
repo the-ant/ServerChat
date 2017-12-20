@@ -13,6 +13,7 @@ import pojo.Group;
 import pojo.Message;
 import pojo.Relationship;
 import pojo.User;
+import utils.DateTimeUtils;
 
 public class ChatAppConnectorDB {
 
@@ -38,6 +39,22 @@ public class ChatAppConnectorDB {
 		}
 	}
 
+	public boolean getUserOnline(int tmpId) {
+		boolean result = false;
+		String query = "Select online From users where user_id = " + tmpId;
+		ResultSet rs = null;
+		try {
+			rs = mStatement.executeQuery(query);
+			while (rs.next()) {
+				result = rs.getBoolean(StructureDB.ONLINE);
+			}
+		} catch (SQLException e) {
+			e.printStackTrace();
+			System.out.println(query);
+		}
+		return result;
+	}
+
 	public List<Message> getMessagesByGroupID(int groupID) {
 		List<Message> result = new ArrayList<>();
 
@@ -47,19 +64,11 @@ public class ChatAppConnectorDB {
 		try {
 			rs = mStatement.executeQuery(query);
 			while (rs.next()) {
-				int messageID = rs.getInt(StructureDB.MESSAGE_ID);
 				String message = rs.getString(StructureDB.MESSAGE);
 				int userID = rs.getInt(StructureDB.MESSAGE_USER_ID);
-				Date dateTime = rs.getTimestamp(StructureDB.MESSAGE_DATE_TIME);
+				boolean isFile = rs.getBoolean(StructureDB.MESSAGE_IS_FILE);
 
-				System.out.println("----------getMessagesByGroupID----------");
-				System.out.println("message_id: " + messageID);
-				System.out.println("group_id: " + groupID);
-				System.out.println("message: " + message);
-				System.out.println("user_id: " + userID);
-				System.out.println("date_time :" + DateTimeUtils.formatDateToStringDB(dateTime));
-
-				Message msg = new Message(groupID, userID, message, dateTime);
+				Message msg = new Message(groupID, userID, message, isFile);
 				result.add(msg);
 			}
 		} catch (SQLException e) {
@@ -72,40 +81,44 @@ public class ChatAppConnectorDB {
 
 	public List<Group> getListGroupsByID(String listGroupsIDStr) {
 		List<Group> result = new ArrayList<Group>();
-		try {
-			ResultSet rs = mStatement.executeQuery(MySQLQuery.GET_LIST_GROUP + listGroupsIDStr + ")");
-			while (rs.next()) {
-				
-				int id = rs.getInt(StructureDB.GROUP_ID);
-				String name = rs.getString(StructureDB.GROUP_NAME);
-				int userIDCreated = rs.getInt(StructureDB.GROUP_USER_ID_CREATED);
-				boolean isChatGroup = rs.getBoolean(StructureDB.GROUP_IS_CHAT_GROUP);
-				String usersStr = rs.getString(StructureDB.GROUP_LIST_USERS);
-				
-				List<Integer> listUsersID = addAllIDs(usersStr);
-				Group group = new Group(id, name, userIDCreated, isChatGroup, listUsersID);
-				
-				result.add(group);
+		if (!listGroupsIDStr.equals("")) {
+			try {
+				ResultSet rs = mStatement.executeQuery(MySQLQuery.GET_LIST_GROUP + listGroupsIDStr + ")");
+				while (rs.next()) {
+
+					int id = rs.getInt(StructureDB.GROUP_ID);
+					String name = rs.getString(StructureDB.GROUP_NAME);
+					int userIDCreated = rs.getInt(StructureDB.GROUP_USER_ID_CREATED);
+					boolean isChatGroup = rs.getBoolean(StructureDB.GROUP_IS_CHAT_GROUP);
+					String usersStr = rs.getString(StructureDB.GROUP_LIST_USERS);
+
+					List<Integer> listUsersID = addAllIDs(usersStr);
+					Group group = new Group(id, name, userIDCreated, isChatGroup, listUsersID);
+
+					result.add(group);
+				}
+			} catch (Exception ex) {
+				ex.printStackTrace();
 			}
-		} catch (Exception ex) {
-			ex.printStackTrace();
 		}
 		return result;
 	}
 
 	public List<User> getListFriendsByID(String friendIdsStr) {
 		List<User> result = new ArrayList<User>();
-		try {
-			ResultSet rs = mStatement.executeQuery(MySQLQuery.GET_LIST_INFO_USER_BY_USERID + friendIdsStr + ")");
-			while (rs.next()) {
-				int id = rs.getInt(StructureDB.USER_ID);
-				String fullname = rs.getString(StructureDB.USER_FULLNAME);
-				boolean online = rs.getBoolean(StructureDB.ONLINE);
+		if (!friendIdsStr.equals("")) {
+			try {
+				ResultSet rs = mStatement.executeQuery(MySQLQuery.GET_LIST_INFO_USER_BY_USERID + friendIdsStr + ")");
+				while (rs.next()) {
+					int id = rs.getInt(StructureDB.USER_ID);
+					String fullname = rs.getString(StructureDB.USER_FULLNAME);
+					boolean online = rs.getBoolean(StructureDB.ONLINE);
 
-				result.add(new User(id, fullname, online));
+					result.add(new User(id, fullname, online));
+				}
+			} catch (Exception ex) {
+				ex.printStackTrace();
 			}
-		} catch (Exception ex) {
-			ex.printStackTrace();
 		}
 		return result;
 	}
@@ -152,10 +165,6 @@ public class ChatAppConnectorDB {
 				List<Integer> listUsersID = addAllIDs(usersStr);
 
 				result = new Group(id, name, userIDCreated, isChatGroup, listUsersID);
-				System.out.println("----------getGroupByID----------");
-				System.out.println("name: " + name);
-				System.out.println("userIDCreated: " + userIDCreated);
-				System.out.println("usersStr: " + usersStr);
 			}
 		} catch (SQLException e) {
 			e.printStackTrace();
@@ -172,9 +181,6 @@ public class ChatAppConnectorDB {
 				String fullname = rs.getString(StructureDB.USER_FULLNAME);
 				boolean online = rs.getBoolean(StructureDB.ONLINE);
 
-				System.out.println("----------getUser----------");
-				System.out.println("name: " + fullname);
-				System.out.println("online: " + online);
 				result = new User(id, fullname, online);
 			}
 		} catch (SQLException e) {
@@ -200,9 +206,6 @@ public class ChatAppConnectorDB {
 				List<Integer> listGroupsID = addAllIDs(groupsStr);
 
 				result = new Relationship(userId, listFriendsID, listGroupsID);
-				System.out.println("user_id: " + userId);
-				System.out.println("friends: " + friendsStr);
-				System.out.println("groups: " + groupsStr);
 			}
 			preStatement.close();
 		} catch (SQLException e) {
@@ -232,6 +235,30 @@ public class ChatAppConnectorDB {
 		}
 	}
 
+	public boolean updateStatusOnline(int userId, boolean online) {
+		PreparedStatement preStatement = null;
+		try {
+			preStatement = mConnection.prepareStatement(MySQLQuery.UPDATE_STATUS_ONLINE_BY_USER_ID);
+			preStatement.setInt(1, online ? 1 : 0);
+			preStatement.setInt(2, userId);
+			preStatement.executeUpdate();
+			preStatement.close();
+			
+			return true;
+		} catch (SQLException ex) {
+			ex.printStackTrace();
+		} finally {
+			if (preStatement != null) {
+				try {
+					preStatement.close();
+				} catch (SQLException e) {
+					e.printStackTrace();
+				}
+			}
+		}
+		return false;
+	}
+
 	public void addNewUser(String username, String password, String fullName) {
 		PreparedStatement preStatement = null;
 		try {
@@ -255,14 +282,15 @@ public class ChatAppConnectorDB {
 		}
 	}
 
-	public void insertMessage(int groupId, int senderId, String msg, Date date) {
+	public void insertMessage(int groupId, int senderId, boolean isFile,String msg, Date date) {
 		PreparedStatement preparedStatement = null;
 		try {
 			preparedStatement = mConnection.prepareStatement(MySQLQuery.INSERT_NEW_MESSAGE);
 			preparedStatement.setInt(1, groupId);
-			preparedStatement.setString(2, msg);
-			preparedStatement.setInt(3, senderId);
-			preparedStatement.setString(4, DateTimeUtils.formatDateToStringDB(date));
+			preparedStatement.setBoolean(2, isFile);
+			preparedStatement.setString(3, msg);
+			preparedStatement.setInt(4, senderId);
+			preparedStatement.setString(5, DateTimeUtils.formatDateToStringDB(date));
 
 			preparedStatement.executeUpdate();
 			preparedStatement.close();
@@ -302,8 +330,9 @@ public class ChatAppConnectorDB {
 
 	private List<Integer> addAllIDs(String idsStr) {
 		List<Integer> result = new ArrayList<>();
-		for (String e : idsStr.split(","))
-			result.add(Integer.parseInt(e));
+		if (!idsStr.equals(""))
+			for (String e : idsStr.split(","))
+				result.add(Integer.parseInt(e));
 		return result;
 	}
 }

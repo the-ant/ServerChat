@@ -45,10 +45,13 @@ public class Group {
 
 	public String getListUserIDStr() {
 		String result = "";
-		for (Integer i : listUserID) {
-			result += i + ",";
+		if (listUserID.size() > 0) {
+			for (Integer i : listUserID) {
+				result += i + ",";
+			}
+			result = result.substring(0, result.length() - 1);
 		}
-		return result.substring(0, result.length() - 1);
+		return result;
 	}
 
 	public void setId(int id) {

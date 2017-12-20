@@ -47,10 +47,13 @@ public class Relationship {
 
 	public String getUserIDStr() {
 		String result = "";
-		for (Integer i : listFriendsID) {
-			result += i + ",";
+		if (listFriendsID.size() > 0) {
+			for (Integer i : listFriendsID) {
+				result += i + ",";
+			}
+			result = result.substring(0, result.length() - 1);
 		}
-		return result.substring(0, result.length() - 1);
+		return result;
 	}
 
 	public void setListFriendsID(List<Integer> listFriendsID) {

@@ -7,11 +7,37 @@ import org.json.JSONObject;
 
 import mysql.StructureDB;
 import pojo.Group;
+import pojo.Message;
 import pojo.User;
 
 public class JSONUtils {
 
-	public static JSONObject createJSONObject(List<User> listFriends, List<Group> listGroups) {
+	public static JSONObject createMessagesObj(List<Message> msgs) {
+		JSONObject obj = new JSONObject();
+		JSONArray friendsArray = createMessagesArray(msgs);
+		obj.put("messages", friendsArray);
+		return obj;
+	}
+	
+	private static JSONArray createMessagesArray(List<Message> msgs) {
+		JSONArray result = new JSONArray();
+		for (Message msg : msgs) {
+			result.put(createMessageJSONObj(msg));
+		}
+		return result;
+	}
+
+	private static JSONObject createMessageJSONObj(Message msg) {
+		JSONObject item = new JSONObject();
+		item.put(StructureDB.MESSAGE_ID, msg.getId());
+		item.put(StructureDB.MESSAGE_GROUP_ID, msg.getGroupID());
+		item.put(StructureDB.MESSAGE, msg.getMessage());
+		item.put(StructureDB.MESSAGE_USER_ID, msg.getUserID());
+		item.put(StructureDB.MESSAGE_IS_FILE, msg.isFile());
+		return item;
+	}
+
+	public static JSONObject createRelationshipObj(List<User> listFriends, List<Group> listGroups) {
 		JSONObject obj = new JSONObject();
 		JSONArray friendsArray = createFriendsArray(listFriends);
 		JSONArray groupsArray = createGroupsArray(listGroups);
@@ -52,5 +78,14 @@ public class JSONUtils {
 		item.put(StructureDB.USER_FULLNAME, user.getFullname());
 		item.put(StructureDB.ONLINE, user.isOnline());
 		return item;
+	}
+
+	public static JSONObject createEmptyJSONObject() {
+		JSONObject obj = new JSONObject();
+		JSONArray friendsArray = new JSONArray();
+		JSONArray groupsArray = new JSONArray();
+		obj.put("friends", friendsArray);
+		obj.put("groups", groupsArray);
+		return obj;
 	}
 }

@@ -9,23 +9,33 @@ public class Message {
 	private int userID;
 	private String message;
 	private Date date;
+	private boolean isMe = false;
+	private boolean isFile = false;
+
+	public Message(int groupID, int userID, String message, boolean isMe, boolean isFile) {
+		this.groupID = groupID;
+		this.userID = userID;
+		this.message = message;
+		this.isMe = isMe;
+		this.isFile = isFile;
+	}
+
+	public boolean isFile() {
+		return isFile;
+	}
+
+	public void setFile(boolean isFile) {
+		this.isFile = isFile;
+	}
+
+	public Message(int groupID, int userID, String message, boolean isFile) {
+		this.groupID = groupID;
+		this.userID = userID;
+		this.message = message;
+		this.isFile = isFile;
+	}
 
 	public Message() {
-	}
-
-	public Message(int id, int groupID, int userID, String message, Date date) {
-		this.id = id;
-		this.groupID = groupID;
-		this.userID = userID;
-		this.message = message;
-		this.date = date;
-	}
-
-	public Message(int groupID, int userID, String message, Date date) {
-		this.groupID = groupID;
-		this.userID = userID;
-		this.message = message;
-		this.date = date;
 	}
 
 	public int getId() {
@@ -66,6 +76,14 @@ public class Message {
 
 	public void setDate(Date date) {
 		this.date = date;
+	}
+
+	public boolean isMe() {
+		return isMe;
+	}
+
+	public void setMe(boolean isMe) {
+		this.isMe = isMe;
 	}
 
 }

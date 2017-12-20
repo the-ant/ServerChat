@@ -40,4 +40,5 @@ public class StructureDB {
 	public static final String PASSWORD = "password";
 	public static final String ONLINE = "online";
 	public static final String USER_FULLNAME = "fullname";
+	public static final String MESSAGE_IS_FILE = "isFile";
 }
