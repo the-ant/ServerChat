@@ -21,9 +21,14 @@ public class Group {
 		this.listUserID = listUserID;
 	}
 
-	public Group(String name, int userIDCreated, List<Integer> listUserID) {
+	public Group(String name, int userIDCreated, int isChatGroup, List<Integer> listUserID) {
 		this.name = name;
 		this.userIDCreated = userIDCreated;
+		if (isChatGroup == 0) {
+			this.isChatGroup = false;
+		} else if (isChatGroup == 1) {
+			this.isChatGroup = true;
+		}
 		this.listUserID = listUserID;
 	}
 

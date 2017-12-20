@@ -4,7 +4,8 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
-import java.util.Date;
+import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.json.JSONObject;
@@ -49,8 +50,9 @@ public class ServerConnection extends Thread {
 	public void run() {
 		try {
 			while (running) {
-				while (dataIn.available() == 0)
-					;
+				while (dataIn.available() == 0) {
+					Thread.sleep(1);
+				}
 
 				String msg = dataIn.readUTF();
 				System.out.println("--> Msg To Server: " + msg);
@@ -60,7 +62,7 @@ public class ServerConnection extends Thread {
 					handleFrameReceive(options, msg);
 				}
 			}
-		} catch (IOException e) {
+		} catch (IOException | InterruptedException e) {
 			e.printStackTrace();
 			close();
 		}
@@ -151,7 +153,6 @@ public class ServerConnection extends Thread {
 		if (exUser != null && handleLoginAction(exUser, password)) {
 			me.setOnline(true);
 			connectorDB.updateStatusOnline(me.getUsername(), me.isOnline());
-//			Ser
 
 			String relationship = getListInfoOfFriends(me.getId());
 			String response = "lgResult-true:" + exUser.getId() + "-" + exUser.getFullname() + "-" + relationship;
@@ -178,8 +179,9 @@ public class ServerConnection extends Thread {
 
 		if (me == null) {
 			connectorDB.addNewUser(arrInfoUser[0], arrInfoUser[1], arrInfoUser[2]);
-			User newUser = connectorDB.checkValidUsername(username);
-			sendMessage("lgResult-true:" + newUser.getId() + "-" + newUser.getFullname());
+			me = connectorDB.checkValidUsername(arrInfoUser[0]);
+			String relationship = getListInfoOfFriends(me.getId());
+			sendMessage("lgResult-true:" + me.getId() + "-" + me.getFullname() + "-" + relationship);
 
 		} else {
 			System.out.println(ResponseServer.ALERT_EXIST_USERNAME);
@@ -189,15 +191,16 @@ public class ServerConnection extends Thread {
 
 	private String getListInfoOfFriends(int userId) {
 		Relationship relationship = connectorDB.getRelationshipByUserID(userId);
-		String result = "";
+		JSONObject obj = null;
 		if (relationship != null) {
 			List<User> listFriends = connectorDB.getListFriendsByID(relationship.getUserIDStr());
 			List<Group> listGroups = connectorDB.getListGroupsByID(relationship.getListGroupsIDStr());
 
-			JSONObject obj = JSONUtils.createJSONObject(listFriends, listGroups);
-			result = obj.toString();
+			obj = JSONUtils.createJSONObject(listFriends, listGroups);
+		} else {
+			obj = JSONUtils.createEmptyJSONObject();
 		}
-		return result;
+		return obj.toString();
 	}
 
 	private void decodeFrame(String[] frameRequestFromClient) {
@@ -205,15 +208,15 @@ public class ServerConnection extends Thread {
 		System.out.println("==> Flag: " + flag);
 
 		switch (flag) {
+		case FlagConnection.GET_ALL_USER:
+			requestGetAllUser();
+			break;
+
 		case FlagConnection.LOGOUT:
 			requestLogout();
 			break;
 
 		case FlagConnection.SEND_MESSAGE:
-			int groupIDSendMsg = Integer.parseInt(frameRequestFromClient[1]);
-			String desId = frameRequestFromClient[2];
-			String msg = frameRequestFromClient[3];
-			requestSendMessage(groupIDSendMsg, desId, msg);
 			break;
 
 		case FlagConnection.GET_MESSAGE:
@@ -221,74 +224,128 @@ public class ServerConnection extends Thread {
 			requestGetMessage(groupIDGetMsg);
 			break;
 
-		case FlagConnection.GET_GROUP:
-			int groupIDGetGroup = Integer.parseInt(frameRequestFromClient[1]);
-			requestGetGroup(groupIDGetGroup);
-			break;
-
-		case FlagConnection.GET_USER:
-			int userIdGetUser = Integer.parseInt(frameRequestFromClient[1]);
-			requestGetUser(userIdGetUser);
-			break;
-
 		case FlagConnection.ADD_FRIEND:
-			int userIdAddFriend = Integer.parseInt(frameRequestFromClient[1]);
-			requestAddFriend(userIdAddFriend);
+			int userIdRequest = this.me.getId();
+			int userIdReceive = Integer.parseInt(frameRequestFromClient[1]);
+			insertRequestAddFriend(userIdRequest, userIdReceive);
+			requestAddFriend(userIdReceive);
 			break;
 
 		case FlagConnection.ADD_GROUP:
 			String groupNameAddGroup = frameRequestFromClient[1];
-			String listUsersAddGroup = frameRequestFromClient[2];
-			requestAddGroup(groupNameAddGroup, listUsersAddGroup);
+			int userIDCreatedGroup = Integer.parseInt(frameRequestFromClient[2]);
+			String listUsersAddGroup = frameRequestFromClient[3];
+			requestAddGroup(groupNameAddGroup, userIDCreatedGroup, listUsersAddGroup);
+			break;
+		case FlagConnection.DELETE_REQUEST_RECORD:
+			int userIdRequested = Integer.parseInt(frameRequestFromClient[1]);
+			int userIdReceived = this.me.getId();
+			deleteRequested(userIdRequested, userIdReceived);
+			String listUserId = userIdRequested + "," + userIdReceived;
+			requestAddGroup("", userIdReceived, listUserId);
+			// get group_id to update list_groups to relationship.
+			int groupId = connectorDB.getGroupIdByListUsers(listUserId);
+			System.out.println("groupId : " + groupId);
+			updateRelationship(userIdRequested, userIdReceived, groupId);
+			updateRelationship(userIdReceived, userIdRequested, groupId);
+			break;
+		case FlagConnection.GET_ALL_REQUESTS:
+			int userId = me.getId();
+			getAllRequestsAddFriends(userId);
 			break;
 		}
 	}
 
-	private void requestAddGroup(String groupNameAddGroup, String listUsersAddGroup) {
+	private void deleteRequested(int userIdRequested, int userIdReceived) {
+		if (connectorDB.deleteRequested(userIdRequested, userIdReceived)) {
+			// get all requests.
+			getAllRequestsAddFriends(userIdReceived);
+		}
+	}
 
+	private void updateRelationship(int userIdRequested, int userIdReceived, int groupId) {
+		List<Integer> listFriends = null;
+		List<Integer> listGroups = null;
+		Relationship newRelationship = null;
+		// check exists relationship record.
+		Relationship relationship = connectorDB.getRelationshipByUserID(userIdRequested);
+		if (relationship == null) {
+			listFriends = new ArrayList<>();
+			listFriends.add(userIdReceived);
+			listGroups = new ArrayList<>();
+			listGroups.add(groupId);
+			newRelationship = new Relationship(userIdRequested, listFriends, listGroups);
+			connectorDB.insertRelationship(newRelationship);
+		} else {
+			System.out.println("relationship of admin: " + relationship.toString());
+			// user has relationship into database.
+			listFriends = relationship.getListFriendsID();
+			listFriends.add(userIdReceived);
+			listGroups = relationship.getListGroupsID();
+			listGroups.add(groupId);
+			newRelationship = new Relationship(userIdRequested, listFriends, listGroups);
+			connectorDB.updateRelationship(newRelationship);
+		}
+		sendFlagUpdateRelationship(userIdRequested);
+	}
+
+	private void sendFlagUpdateRelationship(int userId) {
+		String recordRelationship = getListInfoOfFriends(userId);
+		Server.findConnectionById(userId).sendMessage(FlagConnection.UPDATE_RELATIONSHIP + "|" + recordRelationship);
+	}
+
+	private void getAllRequestsAddFriends(int userId) {
+		String listOfRequests = connectorDB.getAllRequests(userId);
+		System.out.println("list requests: " + listOfRequests);
+		sendMessage(FlagConnection.UPDATE_REQUEST_ADD_FRIEND + "|" + listOfRequests);
+	}
+
+	private void insertRequestAddFriend(int userIdRequested, int userIdReceive) {
+		connectorDB.insertRequestAddFriend(userIdRequested, userIdReceive);
+	}
+
+	private void requestGetAllUser() {
+		List<User> allUser = connectorDB.getAllUser(me.getId());
+		JSONObject result = JSONUtils.createAllUserObject(allUser);
+		String response = FlagConnection.GET_ALL_USER + "|" + result.toString();
+		sendMessage(response);
+	}
+
+	private void requestAddGroup(String groupNameAddGroup, int userIDCreatedGroup, String listUsersAddGroup) {
+		String[] listUserString = listUsersAddGroup.split(",");
+		List<Integer> listUserID = new ArrayList<Integer>();
+		int isChatGroup = 0;
+		if (listUserID.size() >= 3) {
+			isChatGroup = 1;
+		}
+		for (String userId : listUserString) {
+			listUserID.add(Integer.parseInt(userId));
+		}
+		try {
+			connectorDB.insertGroup(new Group(groupNameAddGroup, userIDCreatedGroup, isChatGroup, listUserID));
+			sendMessage(FlagConnection.ADD_GROUP + "|" + "1");
+		} catch (SQLException e) {
+			sendMessage(FlagConnection.ADD_GROUP + "|" + "0");
+			e.printStackTrace();
+		}
 	}
 
 	private void requestAddFriend(int userIdAddFriend) {
-
-	}
-
-	private void requestGetUser(int userIdGetUser) {
-
-	}
-
-	private void requestGetGroup(int groupIDGetGroup) {
-
+		int resultOnline = connectorDB.getOnlineByUserId(userIdAddFriend);
+		if (resultOnline == 1) {
+			// online
+			ServerConnection sc = Server.findConnectionById(userIdAddFriend);
+			if (sc != null) {
+				sc.sendMessage(
+						FlagConnection.REQUEST_ADD_FRIEND + "|" + this.me.getId() + "|" + this.me.getFullname());
+			}
+		} else {
+			insertRequestAddFriend(me.getId(), userIdAddFriend);
+		}
 	}
 
 	private void requestGetMessage(int groupIDGetMsg) {
 
-	}
-
-	private void requestSendMessage(int groupID, String desId, String msg) {
-		connectorDB.insertMessage(groupID, me.getId(), msg, new Date());
-		sendMessageToFriendById(groupID, desId, msg);
-	}
-
-	private void sendMessageToFriendById(int groupID, String desId, String msg) {
-		String[] IDarr = desId.split("[,]");
-		for (String e : IDarr) {
-			int tmpId = Integer.parseInt(e);
-			if (tmpId != me.getId()) {
-				
-			}
-		}
-//		for (ServerConnection con: Server.getListClientThreads()) {
-//			if (con.getSocket() != socket) {
-//				User user = con.getUser();
-//				for(String s : IDarr) {
-//					int id = Integer.parseInt(s);
-//					if (id != me.getId() && id == user.getId()) {
-//						String response = FlagConnection.GET_MESSAGE + "|" + groupID + "|" + msg;
-//						con.sendMessage(response);
-//					}
-//				}
-//			}
-//		}
 	}
 
 	private void requestLogout() {
@@ -304,18 +361,6 @@ public class ServerConnection extends Thread {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-	}
-
-	private void sendToAll(String msg) {
-		for (ServerConnection sc : Server.getListClientThreads()) {
-			if (sc.getSocket() != socket) {
-				sc.sendMessage(msg);
-			}
-		}
-	}
-
-	private Socket getSocket() {
-		return socket;
 	}
 
 	private void sendMessage(String msg) {

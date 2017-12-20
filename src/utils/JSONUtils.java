@@ -53,4 +53,46 @@ public class JSONUtils {
 		item.put(StructureDB.ONLINE, user.isOnline());
 		return item;
 	}
+
+	public static JSONObject createAllUserObject(List<User> allUser) {
+		JSONObject result = new JSONObject();
+		JSONArray arr = createAllUserArray(allUser);
+		result.put("all_user", arr);
+		return result;
+	}
+
+	private static JSONArray createAllUserArray(List<User> allUser) {
+		JSONArray result = new JSONArray();
+		for (User user : allUser) {
+			result.put(createUserJSONObj(user));
+		}
+		return result;
+	}
+	public static JSONObject createEmptyJSONObject() {
+		JSONObject obj = new JSONObject();
+		JSONArray friendsArray = new JSONArray();
+		JSONArray groupsArray = new JSONArray();
+		obj.put("friends", friendsArray);
+		obj.put("groups", groupsArray);
+		return obj;
+	}
+	public static JSONObject createRequestUserJSONObj(User user) {
+		JSONObject item = new JSONObject();
+		item.put(StructureDB.USER_ID, user.getId());
+		item.put(StructureDB.USER_FULLNAME, user.getFullname());
+		return item;
+	}
+	public static JSONObject createAllRequestUsetObject(List<User> requests) {
+		JSONObject result = new JSONObject();
+		JSONArray requestArray = createAllRequestUserArray(requests);
+		result.put("all_requests", requestArray);
+		return result;
+	}
+	private static JSONArray createAllRequestUserArray(List<User> users) {
+		JSONArray result = new JSONArray();
+		for (User user : users) {
+			result.put(createRequestUserJSONObj(user));
+		}
+		return result;
+	}
 }

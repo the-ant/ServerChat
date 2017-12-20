@@ -9,10 +9,13 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
+import org.json.JSONObject;
+
 import pojo.Group;
 import pojo.Message;
 import pojo.Relationship;
 import pojo.User;
+import utils.JSONUtils;
 
 public class ChatAppConnectorDB {
 
@@ -36,6 +39,49 @@ public class ChatAppConnectorDB {
 				e.printStackTrace();
 			}
 		}
+	}
+
+	public List<User> getAllUser(int mId) {
+		List<User> result = new ArrayList<>();
+		String friendIds = getFriendIds(mId);
+		System.out.println("getAllUser - friend_ids: " + friendIds);
+
+		PreparedStatement preStatement = null;
+		try {
+			preStatement = mConnection.prepareStatement(MySQLQuery.GET_ALL_USER);
+			ResultSet rs = preStatement.executeQuery();
+			while (rs.next()) {
+				int id = rs.getInt(StructureDB.USER_ID);
+				String fullname = rs.getString(StructureDB.USER_FULLNAME);
+				boolean online = rs.getBoolean(StructureDB.ONLINE);
+
+				if (!friendIds.contains("" + id) && id != mId) {
+					User user = new User(id, fullname, online);
+					result.add(user);
+				}
+			}
+			preStatement.close();
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+		return result;
+	}
+
+	private String getFriendIds(int mId) {
+		String result = "";
+		PreparedStatement preStatement = null;
+		try {
+			preStatement = mConnection.prepareStatement(MySQLQuery.GET_LIST_FRIEND_IDS_BY_USERID);
+			preStatement.setInt(1, mId);
+			ResultSet rs = preStatement.executeQuery();
+			while (rs.next()) {
+				result = rs.getString(StructureDB.RELATIONSHIP_LIST_FRIENDS);
+			}
+			preStatement.close();
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+		return result;
 	}
 
 	public List<Message> getMessagesByGroupID(int groupID) {
@@ -75,16 +121,15 @@ public class ChatAppConnectorDB {
 		try {
 			ResultSet rs = mStatement.executeQuery(MySQLQuery.GET_LIST_GROUP + listGroupsIDStr + ")");
 			while (rs.next()) {
-				
 				int id = rs.getInt(StructureDB.GROUP_ID);
 				String name = rs.getString(StructureDB.GROUP_NAME);
 				int userIDCreated = rs.getInt(StructureDB.GROUP_USER_ID_CREATED);
 				boolean isChatGroup = rs.getBoolean(StructureDB.GROUP_IS_CHAT_GROUP);
 				String usersStr = rs.getString(StructureDB.GROUP_LIST_USERS);
-				
+
 				List<Integer> listUsersID = addAllIDs(usersStr);
 				Group group = new Group(id, name, userIDCreated, isChatGroup, listUsersID);
-				
+
 				result.add(group);
 			}
 		} catch (Exception ex) {
@@ -162,7 +207,21 @@ public class ChatAppConnectorDB {
 		}
 		return result;
 	}
-
+	
+	public int getGroupIdByListUsers(String listUserId) {
+		PreparedStatement preparedStatement = null;
+		try {
+			preparedStatement = mConnection.prepareStatement(MySQLQuery.GET_GROUP_ID_BY_LIST_USERS);
+			preparedStatement.setString(1, listUserId);
+			ResultSet result = preparedStatement.executeQuery();
+			if (result.next()) {
+				return result.getInt(StructureDB.GROUP_ID);
+			}
+		} catch (SQLException ex) {
+			ex.printStackTrace();
+		}
+		return -1;
+	}
 	public User getUser(int id) {
 		User result = null;
 		String query = "Select * from " + StructureDB.TABLE_USERS + " where " + StructureDB.USER_ID + " = " + id;
@@ -188,7 +247,7 @@ public class ChatAppConnectorDB {
 		Relationship result = null;
 		PreparedStatement preStatement = null;
 		try {
-			preStatement = mConnection.prepareStatement(MySQLQuery.GET_LIST_FRIENDS_BY_USERID);
+			preStatement = mConnection.prepareStatement(MySQLQuery.GET_RELATIONSHIP_BY_USERID);
 			preStatement.setInt(1, userId);
 			ResultSet rs = preStatement.executeQuery();
 			while (rs.next()) {
@@ -209,6 +268,21 @@ public class ChatAppConnectorDB {
 			e.printStackTrace();
 		}
 		return result;
+	}
+
+	public int getOnlineByUserId(int userId) {
+		PreparedStatement preparedStatement = null;
+		try {
+			preparedStatement = mConnection.prepareStatement(MySQLQuery.GET_ONLINE_BY_USERID);
+			preparedStatement.setInt(1, userId);
+			ResultSet result = preparedStatement.executeQuery();
+			if (result.next()) {
+				return result.getInt(StructureDB.ONLINE);
+			}
+		} catch (SQLException ex) {
+			ex.printStackTrace();
+		}
+		return -1;
 	}
 
 	public void updateStatusOnline(String username, boolean online) {
@@ -271,19 +345,15 @@ public class ChatAppConnectorDB {
 		}
 	}
 
-	public void insertGroup(Group group) {
+	public void insertGroup(Group group) throws SQLException {
 		PreparedStatement preparedStatement = null;
-		try {
-			preparedStatement = mConnection.prepareStatement(MySQLQuery.INSERT_GROUP);
-			preparedStatement.setString(1, group.getName());
-			preparedStatement.setInt(2, group.getUserIDCreated());
-			preparedStatement.setBoolean(3, group.isChatGroup());
-			preparedStatement.setString(4, group.getListUserIDStr());
-			preparedStatement.executeUpdate();
-			preparedStatement.close();
-		} catch (SQLException e1) {
-			e1.printStackTrace();
-		}
+		preparedStatement = mConnection.prepareStatement(MySQLQuery.INSERT_GROUP);
+		preparedStatement.setString(1, group.getName());
+		preparedStatement.setInt(2, group.getUserIDCreated());
+		preparedStatement.setBoolean(3, group.isChatGroup());
+		preparedStatement.setString(4, group.getListUserIDStr());
+		preparedStatement.executeUpdate();
+		preparedStatement.close();
 	}
 
 	public void insertRelationship(Relationship relationship) {
@@ -299,11 +369,126 @@ public class ChatAppConnectorDB {
 			e1.printStackTrace();
 		}
 	}
+	
+	public void insertRelationshipWithUserId(int userId, String listFriends, String listGroups) {
+		PreparedStatement preparedStatement = null;
+		try {
+			preparedStatement = mConnection.prepareStatement(MySQLQuery.INSERT_RELATIONSHIP);
+			preparedStatement.setInt(1, userId);
+			preparedStatement.setString(2, listFriends);
+			preparedStatement.setString(3, listGroups);
+			preparedStatement.executeUpdate();
+			preparedStatement.close();
+		} catch (SQLException e1) {
+			e1.printStackTrace();
+		}
+	}
 
 	private List<Integer> addAllIDs(String idsStr) {
 		List<Integer> result = new ArrayList<>();
-		for (String e : idsStr.split(","))
-			result.add(Integer.parseInt(e));
+		if (!idsStr.isEmpty()) {
+			for (String e : idsStr.split(","))
+				result.add(Integer.parseInt(e));
+		}
 		return result;
+	}
+
+	public String getListFriendsByUserId(int userId) {
+		String listFriends = null;
+		PreparedStatement preparedStatement = null;
+		try {
+			preparedStatement = mConnection.prepareStatement(MySQLQuery.GET_LIST_FRIEND_IDS_BY_USERID);
+			preparedStatement.setInt(1, userId);
+			ResultSet result = preparedStatement.executeQuery();
+			if (result.next()) {
+				listFriends = result.getString(StructureDB.RELATIONSHIP_LIST_FRIENDS);
+			}
+			return listFriends;
+		} catch (SQLException e1) {
+			e1.printStackTrace();
+		} finally {
+			if (preparedStatement != null) {
+				try {
+					preparedStatement.close();
+				} catch (SQLException e) {
+					e.printStackTrace();
+				}
+			}
+		}
+		return null;
+	}
+
+	public void updateRelationship(Relationship relationship) {
+		PreparedStatement preparedStatement = null;
+		try {
+			preparedStatement = mConnection.prepareStatement(MySQLQuery.UPDATE_RELATIONSHIP);
+			preparedStatement.setString(1, relationship.getUserIDStr());
+			preparedStatement.setString(2, relationship.getListGroupsIDStr());
+			preparedStatement.setInt(3, relationship.getUserID());
+			preparedStatement.executeUpdate();
+			preparedStatement.close();
+		} catch (SQLException ex) {
+			ex.printStackTrace();
+		}
+	}
+
+	public boolean deleteRequested(int userIdRequested, int userIdReceive) {
+		PreparedStatement preparedStatement = null;
+		try {
+			preparedStatement = mConnection.prepareStatement(MySQLQuery.DELETE_REQUESTED);
+			preparedStatement.setInt(1, userIdRequested);
+			preparedStatement.setInt(2, userIdReceive);
+			preparedStatement.executeUpdate();
+			preparedStatement.close();
+			return true;
+		} catch (SQLException e1) {
+			e1.printStackTrace();
+			return false;
+		}
+	}
+
+	public String getAllRequests(int userIdReceived) {
+		PreparedStatement preparedStatement = null;
+		List<User> users = new ArrayList<>();
+		try {
+			System.out.println(MySQLQuery.GET_ALL_REQUESTED);
+			preparedStatement = mConnection.prepareStatement(MySQLQuery.GET_ALL_REQUESTED);
+			preparedStatement.setInt(1, userIdReceived);
+			ResultSet result = preparedStatement.executeQuery();
+			while (result.next()) {
+				User user = new User(result.getInt(StructureDB.USER_ID), result.getString(StructureDB.USER_FULLNAME));
+				users.add(user);
+			}
+			if (users.size() > 0) {
+				JSONObject jsonObject = JSONUtils.createAllRequestUsetObject(users);
+				return jsonObject.toString();
+			} else {
+				return JSONUtils.createEmptyJSONObject().toString();
+			}
+		} catch (SQLException ex) {
+			ex.printStackTrace();
+		} finally {
+			if (preparedStatement != null) {
+				try {
+					preparedStatement.close();
+				} catch (SQLException e) {
+					e.printStackTrace();
+				}
+			}
+		}
+		return null;
+	}
+
+	public void insertRequestAddFriend(int userIdRequested, int userIdReceive) {
+		PreparedStatement preparedStatement = null;
+		try {
+			preparedStatement = mConnection.prepareStatement(MySQLQuery.INSERT_NEW_REQUEST);
+			preparedStatement.setInt(1, userIdRequested);
+			preparedStatement.setInt(2, userIdReceive);
+			preparedStatement.executeUpdate();
+			preparedStatement.close();
+		} catch (SQLException e1) {
+			e1.printStackTrace();
+		}
 	}
 }

@@ -8,9 +8,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.commons.collections4.map.HashedMap;
 
 import mysql.ChatAppConnectorDB;
+import pojo.User;
 
 public class Server extends Thread {
 
@@ -78,5 +78,15 @@ public class Server extends Thread {
 
 	public ServerSocket getServerSocket() {
 		return serverSocket;
+	}
+	public static ServerConnection findConnectionById(int id) {
+		ServerConnection result = null;
+		for (ServerConnection serverConnection : listClients) {
+			User user = serverConnection.getUser();
+			if (user != null && user.getId() == id) {
+				result = serverConnection;
+			}
+		}
+		return result;
 	}
 }
