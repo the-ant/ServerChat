@@ -1,5 +1,6 @@
 package pojo;
 
+import java.io.File;
 import java.util.Date;
 
 public class Message {
@@ -8,9 +9,11 @@ public class Message {
 	private int groupID;
 	private int userID;
 	private String message;
+	private String sender;
 	private Date date;
 	private boolean isMe = false;
 	private boolean isFile = false;
+	private File image;
 
 	public Message(int groupID, int userID, String message, boolean isMe, boolean isFile) {
 		this.groupID = groupID;
@@ -33,6 +36,14 @@ public class Message {
 		this.userID = userID;
 		this.message = message;
 		this.isFile = isFile;
+	}
+
+	public Message(int groupID, int userID, String sender, String message, boolean isFile) {
+		this.groupID = groupID;
+		this.userID = userID;
+		this.message = message;
+		this.isFile = isFile;
+		this.sender = sender;
 	}
 
 	public Message() {
@@ -86,4 +97,19 @@ public class Message {
 		this.isMe = isMe;
 	}
 
+	public String getSender() {
+		return sender;
+	}
+
+	public void setSender(String sender) {
+		this.sender = sender;
+	}
+
+	public File getImage() {
+		return image;
+	}
+
+	public void setImage(File image) {
+		this.image = image;
+	}
 }

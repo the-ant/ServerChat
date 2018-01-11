@@ -18,7 +18,7 @@ public class JSONUtils {
 		obj.put("messages", friendsArray);
 		return obj;
 	}
-	
+
 	private static JSONArray createMessagesArray(List<Message> msgs) {
 		JSONArray result = new JSONArray();
 		for (Message msg : msgs) {
@@ -29,11 +29,11 @@ public class JSONUtils {
 
 	private static JSONObject createMessageJSONObj(Message msg) {
 		JSONObject item = new JSONObject();
-		item.put(StructureDB.MESSAGE_ID, msg.getId());
 		item.put(StructureDB.MESSAGE_GROUP_ID, msg.getGroupID());
 		item.put(StructureDB.MESSAGE, msg.getMessage());
 		item.put(StructureDB.MESSAGE_USER_ID, msg.getUserID());
 		item.put(StructureDB.MESSAGE_IS_FILE, msg.isFile());
+		item.put(StructureDB.MESSAGE_SENDER, msg.getSender());
 		return item;
 	}
 
@@ -45,7 +45,7 @@ public class JSONUtils {
 		obj.put("groups", groupsArray);
 		return obj;
 	}
-	
+
 	public static JSONArray createGroupsArray(List<Group> listGroups) {
 		JSONArray array = new JSONArray();
 		for (Group group : listGroups) {
@@ -87,5 +87,42 @@ public class JSONUtils {
 		obj.put("friends", friendsArray);
 		obj.put("groups", groupsArray);
 		return obj;
+	}
+
+	public static JSONObject createRequestUserJSONObj(User user) {
+		JSONObject item = new JSONObject();
+		item.put(StructureDB.USER_ID, user.getId());
+		item.put(StructureDB.USER_FULLNAME, user.getFullname());
+		return item;
+	}
+
+	public static JSONObject createAllRequestUsetObject(List<User> requests) {
+		JSONObject result = new JSONObject();
+		JSONArray requestArray = createAllRequestUserArray(requests);
+		result.put("all_requests", requestArray);
+		return result;
+	}
+
+	private static JSONArray createAllRequestUserArray(List<User> users) {
+		JSONArray result = new JSONArray();
+		for (User user : users) {
+			result.put(createRequestUserJSONObj(user));
+		}
+		return result;
+	}
+
+	public static JSONObject createAllUserObject(List<User> allUser) {
+		JSONObject result = new JSONObject();
+		JSONArray arr = createAllUserArray(allUser);
+		result.put("all_user", arr);
+		return result;
+	}
+
+	private static JSONArray createAllUserArray(List<User> allUser) {
+		JSONArray result = new JSONArray();
+		for (User user : allUser) {
+			result.put(createUserJSONObj(user));
+		}
+		return result;
 	}
 }

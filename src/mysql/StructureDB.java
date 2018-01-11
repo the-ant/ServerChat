@@ -11,6 +11,8 @@ public class StructureDB {
 	public static final String MESSAGE = "message";
 	public static final String MESSAGE_USER_ID = "user_id";
 	public static final String MESSAGE_DATE_TIME= "date_time";
+	public static final String MESSAGE_IS_FILE = "is_file";
+	public static final String MESSAGE_SENDER = "sender";
 
 	/*
 	 * Table Groups
@@ -23,9 +25,9 @@ public class StructureDB {
 	public static final String GROUP_LIST_USERS = "list_users";
 
 	/*
-	 * Table Relationship
+	 * Table Relationships
 	 */
-	public static final String TABLE_RELATIONSHIP = "relationship";
+	public static final String TABLE_RELATIONSHIPS = "relationships";
 	public static final String RELATIONSHIP_ID = "relationship_id";
 	public static final String RELATIONSHIP_USER_ID = "user_id";
 	public static final String RELATIONSHIP_LIST_FRIENDS = "list_friends";
@@ -40,5 +42,12 @@ public class StructureDB {
 	public static final String PASSWORD = "password";
 	public static final String ONLINE = "online";
 	public static final String USER_FULLNAME = "fullname";
-	public static final String MESSAGE_IS_FILE = "isFile";
+	
+	/*
+	 * Table waiting_requests
+	 * */
+	public static final String TABLE_WAITING_REQUESTS = "waiting_requests";
+	public static final String REQUEST_ID = "request_id";
+	public static final String USERID_REQUESTED = "user_id_requested";
+	public static final String USERID_RECEIVE = "user_id_receive";
 }

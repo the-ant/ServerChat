@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
@@ -27,7 +28,14 @@ import utils.JSONUtils;
 
 public class ServerConnection extends Thread {
 
-	private static final String DIRECTORY_SAVE_FILES = "D:\\Java\\WS\\ServerChatSDT\\save_files\\";
+	private String getDirectorySaveFiles() {
+		return "C:\\Users\\" + getUserName() + "\\Documents\\" + "ChatApplication";
+	}
+
+	public String getUserName() {
+		String username = System.getProperty("user.name");
+		return username;
+	}
 
 	private Socket socket;
 	private DataInputStream dataIn;
@@ -143,11 +151,13 @@ public class ServerConnection extends Thread {
 
 		if (me != null && me.getPassword().equals(password)) {
 			me.setOnline(true);
-			connectorDB.updateStatusOnline(me.getUsername(), me.isOnline());
+			connectorDB.updateStatusOnline(me.getId(), me.isOnline());
+
 			controller.Screen.appendText(me.getUsername() + " dang nhap thanh cong. \n");
 			notifyOnlineToOnlineFriends();
 
 			String relationship = getListInfoOfFriends(me.getId());
+			System.out.println("handleLoginForm: " + relationship);
 			sendMessage("lgResult-true:" + me.getId() + "-" + me.getFullname() + "-" + relationship);
 		} else {
 			sendMessage("lgResult-false");
@@ -162,15 +172,16 @@ public class ServerConnection extends Thread {
 		me = connectorDB.checkValidUsername(username);
 		if (me != null && handleLoginAction(me, password)) {
 			me.setOnline(true);
-			connectorDB.updateStatusOnline(me.getUsername(), me.isOnline());
+			connectorDB.updateStatusOnline(me.getId(), me.isOnline());
 
 			String relationship = getListInfoOfFriends(me.getId());
 			String response = "lgResult-true:" + me.getId() + "-" + me.getFullname() + "-" + relationship;
+			System.out.println("handleLoginForm: " + relationship);
 
 			sendMessage(response);
 
 			String notification = FlagConnection.NOTIFY_ONLINE + "|" + me.getId();
-			notifyToOnlineFriends(notification);
+			notifyOfflineToOnlineFriends(notification);
 		} else {
 			sendMessage("lgResult-false");
 		}
@@ -192,7 +203,7 @@ public class ServerConnection extends Thread {
 		if (me == null) {
 			connectorDB.addNewUser(arrInfoUser[0], arrInfoUser[1], arrInfoUser[2]);
 			me = connectorDB.checkValidUsername(username);
-			
+
 			String relationship = getListInfoOfFriends(me.getId());
 			sendMessage("lgResult-true:" + me.getId() + "-" + me.getFullname() + "-" + relationship);
 
@@ -204,13 +215,15 @@ public class ServerConnection extends Thread {
 
 	private void notifyOnlineToOnlineFriends() {
 		Relationship relationship = connectorDB.getRelationshipByUserID(me.getId());
-		List<User> listFriends = connectorDB.getListFriendsByID(relationship.getUserIDStr());
+		if (relationship != null) {
+			List<User> listFriends = connectorDB.getListFriendsByID(relationship.getUserIDStr());
 
-		for (User user : listFriends) {
-			ServerConnection conn = Server.findConnectionById(user.getId());
-			if (conn != null && user.isOnline()) {
-				String notification = FlagConnection.NOTIFY_ONLINE + "|" + me.getId();
-				conn.sendMessage(notification);
+			for (User user : listFriends) {
+				ServerConnection conn = Server.findConnectionById(user.getId());
+				if (conn != null && user.isOnline()) {
+					String notification = FlagConnection.NOTIFY_ONLINE + "|" + me.getId();
+					conn.sendMessage(notification);
+				}
 			}
 		}
 	}
@@ -221,8 +234,14 @@ public class ServerConnection extends Thread {
 		JSONObject obj = null;
 
 		if (relationship != null) {
+			System.out.println("getListInfoOfFriends: " + relationship.getUserIDStr());
+			System.out.println("getListInfoOfFriends: " + relationship.getListGroupsIDStr());
+
 			List<User> listFriends = connectorDB.getListFriendsByID(relationship.getUserIDStr());
 			List<Group> listGroups = connectorDB.getListGroupsByID(relationship.getListGroupsIDStr());
+			for (Group group : listGroups) {
+				System.out.println("Group: " + group.getId());
+			}
 
 			obj = JSONUtils.createRelationshipObj(listFriends, listGroups);
 		} else {
@@ -254,14 +273,26 @@ public class ServerConnection extends Thread {
 			break;
 
 		case FlagConnection.ADD_FRIEND:
-			int userIdAddFriend = Integer.parseInt(frameRequestFromClient[1]);
-			requestAddFriend(userIdAddFriend);
+			int userIdRequest = this.me.getId();
+			int userIdReceive = Integer.parseInt(frameRequestFromClient[1]);
+			requestAddFriend(userIdRequest, userIdReceive);
 			break;
 
 		case FlagConnection.ADD_GROUP:
 			String groupNameAddGroup = frameRequestFromClient[1];
-			String listUsersAddGroup = frameRequestFromClient[2];
-			requestAddGroup(groupNameAddGroup, listUsersAddGroup);
+			int userIDCreatedGroup = Integer.parseInt(frameRequestFromClient[2]);
+			String listUsersAddGroup = me.getId() + "," + frameRequestFromClient[3];
+			System.out.println("ADD_GROUP: " + listUsersAddGroup);
+			requestAddGroup(groupNameAddGroup, userIDCreatedGroup, listUsersAddGroup);
+			break;
+
+		case FlagConnection.DELETE_REQUEST_RECORD:
+			deleteResquestRecord(frameRequestFromClient);
+			break;
+
+		case FlagConnection.GET_ALL_REQUESTS:
+			int userId = me.getId();
+			getAllRequestsAddFriends(userId);
 			break;
 
 		case FlagConnection.SEND_FILE:
@@ -273,15 +304,106 @@ public class ServerConnection extends Thread {
 			String fileName = frameRequestFromClient[2];
 			requestDLFile(groupId, fileName);
 			break;
+
+		case FlagConnection.GET_ALL_USER:
+			requestGetAllUser();
+			break;
+
+		case FlagConnection.GET_RELATIONSHIP:
+			requestGetRelationships();
+			break;
 		}
 	}
 
-	private void requestDLFile(int groupId, String fileName) {
-		System.out.println("requestSendFile: " + fileName);
+	private void requestGetRelationships() {
+		String relationship = getListInfoOfFriends(me.getId());
+		System.out.println("requestGetRelationships: " + relationship);
+		if (!relationship.equals("")) {
+			sendMessage(FlagConnection.GET_RELATIONSHIP + "|" + relationship);
+		}
+	}
 
-		File folder = new File(DIRECTORY_SAVE_FILES + "\\" + groupId);
+	private void requestGetAllUser() {
+		List<User> allUser = connectorDB.getAllUser(me.getId());
+		JSONObject result = JSONUtils.createAllUserObject(allUser);
+		String response = FlagConnection.GET_ALL_USER + "|" + result.toString();
+		sendMessage(response);
+	}
+
+	private void deleteResquestRecord(String[] frameRequestFromClient) {
+		int userIdRequested = Integer.parseInt(frameRequestFromClient[1]);
+		int userIdReceived = this.me.getId();
+		deleteRequested(userIdRequested, userIdReceived);
+
+		String listUserId = userIdRequested + "," + userIdReceived;
+		requestAddGroup("", userIdReceived, listUserId);
+
+		int groupId = connectorDB.getGroupIdByListUsers(listUserId);
+		System.out.println("groupId: update: " + groupId);
+
+		updateRelationship(userIdRequested, userIdReceived, groupId);
+		updateRelationship(userIdReceived, userIdRequested, groupId);
+	}
+
+	private void updateRelationship(int userIdRequested, int userIdReceived, int groupId) {
+		List<Integer> listFriends = null;
+		List<Integer> listGroups = null;
+		Relationship newRelationship = null;
+
+		Relationship relationship = connectorDB.getRelationshipByUserID(userIdRequested);
+		if (relationship == null) {
+			listFriends = new ArrayList<>();
+			listFriends.add(userIdReceived);
+
+			listGroups = new ArrayList<>();
+			listGroups.add(groupId);
+
+			newRelationship = new Relationship(userIdRequested, listFriends, listGroups);
+			connectorDB.insertRelationship(newRelationship);
+		} else {
+			System.out.println("relationship of admin: " + relationship.toString());
+			listFriends = relationship.getListFriendsID();
+			listFriends.add(userIdReceived);
+
+			listGroups = relationship.getListGroupsID();
+			listGroups.add(groupId);
+
+			newRelationship = new Relationship(userIdRequested, listFriends, listGroups);
+			connectorDB.updateRelationship(newRelationship);
+		}
+		sendFlagUpdateRelationship(userIdRequested);
+	}
+
+	private void sendFlagUpdateRelationship(int userIdRequested) {
+		String recordRelationship = getListInfoOfFriends(userIdRequested);
+		System.out.println("sendFlagUpdateRelationship: " + recordRelationship);
+		ServerConnection sc = Server.findConnectionById(userIdRequested);
+		if (sc != null) {
+			sc.sendMessage(FlagConnection.UPDATE_RELATIONSHIP + "|" + recordRelationship);
+		}
+	}
+
+	private void deleteRequested(int userIdRequested, int userIdReceived) {
+		if (connectorDB.deleteRequested(userIdRequested, userIdReceived)) {
+			getAllRequestsAddFriends(userIdReceived);
+		}
+	}
+
+	private void getAllRequestsAddFriends(int userIdReceived) {
+		String listOfRequests = connectorDB.getAllRequests(userIdReceived);
+		System.out.println("list requests: " + listOfRequests);
+		sendMessage(FlagConnection.UPDATE_REQUEST_ADD_FRIEND + "|" + listOfRequests);
+	}
+
+	private void requestDLFile(int groupId, String fileName) {
+
+		String folderPath = getDirectorySaveFiles() + "\\" + groupId;
+		System.out.println("requestDLFile: " + fileName + " - " + folderPath);
+
+		File folder = new File(folderPath);
 		if (folder.exists()) {
 			File[] listOfFiles = folder.listFiles();
+			System.out.println("requestDLFile: " + listOfFiles.length);
 			for (File file : listOfFiles) {
 				System.out.println("File: " + file.getName());
 				if (file.isFile() && fileName.equals(file.getName())) {
@@ -302,6 +424,7 @@ public class ServerConnection extends Thread {
 					} catch (IOException e) {
 						e.printStackTrace();
 					}
+					break;
 				}
 			}
 		}
@@ -310,17 +433,24 @@ public class ServerConnection extends Thread {
 	private void requestSendFile(String[] frameRequestFromClient) {
 		try {
 			int mId = Integer.parseInt(frameRequestFromClient[1]);
-			int group_id = Integer.parseInt(frameRequestFromClient[2]);
-			String usersGroup = frameRequestFromClient[3];
+			String sender = frameRequestFromClient[2];
+			int group_id = Integer.parseInt(frameRequestFromClient[3]);
+			String usersGroup = frameRequestFromClient[4];
 
 			MyFile file = new MyFile();
-			String[] fileInfo = frameRequestFromClient[4].split("[,]");
+			String[] fileInfo = frameRequestFromClient[5].split("[,]");
 			String fileName = fileInfo[0];
 			long fileSize = Long.parseLong(fileInfo[1]);
 
 			file.setName(fileName);
 			file.setSize(fileSize);
-			String filePath = DIRECTORY_SAVE_FILES + "\\" + group_id;
+
+			File directory = new File(getDirectorySaveFiles());
+			if (!directory.exists()) {
+				directory.mkdir();
+			}
+
+			String filePath = getDirectorySaveFiles() + "\\" + group_id;
 
 			File saveFile = new File(filePath);
 			if (!saveFile.exists()) {
@@ -329,7 +459,7 @@ public class ServerConnection extends Thread {
 			file.setPath(filePath + "\\" + fileName);
 
 			System.out.println("requestSendFile: " + mId + " - " + group_id + " - " + fileName);
-			connectorDB.insertMessage(group_id, mId, true, fileName, new Date());
+			connectorDB.insertMessage(group_id, mId, sender, true, fileName, new Date());
 
 			InputStream fileIS = socket.getInputStream();
 			BufferedInputStream bufferedInputStream = new BufferedInputStream(fileIS);
@@ -343,19 +473,75 @@ public class ServerConnection extends Thread {
 			fos.flush();
 			fos.close();
 
-			sendMessageToFriendById(group_id, mId, usersGroup, fileName, true);
+			sendMessageToFriendById(group_id, mId, sender, usersGroup, fileName, true);
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
 
 	}
 
-	private void requestAddGroup(String groupNameAddGroup, String listUsersAddGroup) {
+	private void requestAddGroup(String groupNameAddGroup, int userIDCreatedGroup, String listUsersAddGroup) {
+		String[] listUserString = listUsersAddGroup.split(",");
+		List<Integer> listUserID = new ArrayList<Integer>();
+
+		for (String userId : listUserString) {
+			listUserID.add(Integer.parseInt(userId));
+		}
+
+		boolean isChatGroup = false;
+		if (listUserID.size() >= 3) {
+			isChatGroup = true;
+		}
+
+		Group gr = new Group(groupNameAddGroup, userIDCreatedGroup, isChatGroup, listUserID);
+		if (connectorDB.isExistGroupName(gr)) {
+			sendMessage(FlagConnection.ADD_GROUP + "|" + 0);
+		} else {
+			connectorDB.insertGroup(gr);
+
+			if (isChatGroup) {
+				int newGroupId = connectorDB.getGroupIdByGroupName(gr);
+				if (newGroupId != -1) {
+					gr.setId(newGroupId);
+
+					for (int userId : listUserID) {
+						Relationship rs = connectorDB.getRelationshipByUserID(userId);
+						if (rs != null) {
+							rs.getListGroupsID().add(newGroupId);
+							connectorDB.updateRelationship(rs);
+						}
+
+						ServerConnection sc = Server.findConnectionById(userId);
+						if (sc != null && sc.getUser() != null) {
+							System.out.println("get-rela: " + sc.getUser().getFullname());
+							sc.sendMessage(FlagConnection.ADD_GROUP + "|" + 1 + "|" + gr.getId() + "|" + gr.getName()
+									+ "|" + gr.getListUserIDStr());
+						}
+					}
+				}
+			}
+		}
 
 	}
 
-	private void requestAddFriend(int userIdAddFriend) {
+	private void requestAddFriend(int userIdRequest, int userIdReceive) {
+		insertRequestAddFriend(userIdRequest, userIdReceive);
 
+		System.out.println("requestAddFriend=====");
+		ServerConnection desConnection = Server.findConnectionById(userIdReceive);
+		if (desConnection != null) {
+			boolean online = connectorDB.getUserOnline(userIdReceive);
+			if (online) {
+				System.out.println("requestAddFriend===== online");
+				String response = FlagConnection.REQUEST_ADD_FRIEND + "|" + userIdRequest + "|"
+						+ me.getFullname();
+				desConnection.sendMessage(response);
+			}
+		}
+	}
+
+	private void insertRequestAddFriend(int userIdRequested, int userIdReceive) {
+		connectorDB.insertRequestAddFriend(userIdRequested, userIdReceive);
 	}
 
 	private void requestGetMessage(int groupIDGetMsg) {
@@ -367,11 +553,13 @@ public class ServerConnection extends Thread {
 	}
 
 	private void requestSendMessage(int groupID, String desId, String msg) {
-		connectorDB.insertMessage(groupID, me.getId(), false, msg, new Date());
-		sendMessageToFriendById(groupID, me.getId(), desId, msg, false);
+		System.out.println("requestSendMessage: " + groupID);
+		connectorDB.insertMessage(groupID, me.getId(), me.getFullname(), false, msg, new Date());
+		sendMessageToFriendById(groupID, me.getId(), me.getFullname(), desId, msg, false);
 	}
 
-	private void sendMessageToFriendById(int groupID, int mId, String desId, String msg, boolean isFileName) {
+	private void sendMessageToFriendById(int groupID, int mId, String sender, String desId, String msg,
+			boolean isFileName) {
 		String[] IDarr = desId.split("[,]");
 
 		for (String e : IDarr) {
@@ -381,8 +569,8 @@ public class ServerConnection extends Thread {
 				if (desConnection != null) {
 					boolean online = connectorDB.getUserOnline(tmpId);
 					if (online) {
-						String response = FlagConnection.RECEIVE_MESSAGE + "|" + groupID + "|" + mId + "|" + msg + "|"
-								+ isFileName;
+						String response = FlagConnection.RECEIVE_MESSAGE + "|" + groupID + "|" + mId + "|" + sender
+								+ "|" + msg + "|" + isFileName;
 						desConnection.sendMessage(response);
 					}
 				}
@@ -392,24 +580,22 @@ public class ServerConnection extends Thread {
 
 	private void requestLogout() {
 		boolean logoutSuccessfull = connectorDB.updateStatusOnline(me.getId(), false);
-		String responseLogout = FlagConnection.LOGOUT + "|";
 		if (logoutSuccessfull) {
-			responseLogout += 1;
 			String notificationLogout = FlagConnection.NOTIFY_LOGOUT + "|" + me.getId();
-			notifyToOnlineFriends(notificationLogout);
+			notifyOfflineToOnlineFriends(notificationLogout);
 		} else {
-			responseLogout += 0;
+			System.out.println("Logout k dc");
 		}
-		sendMessage(responseLogout);
 	}
 
-	private void notifyToOnlineFriends(String notification) {
+	private void notifyOfflineToOnlineFriends(String notification) {
 		Relationship relationship = connectorDB.getRelationshipByUserID(me.getId());
 		if (relationship != null) {
 			List<User> listFriends = connectorDB.getListFriendsByID(relationship.getUserIDStr());
 			for (User user : listFriends) {
 				ServerConnection conn = Server.findConnectionById(user.getId());
 				if (conn != null && user.isOnline()) {
+					System.out.println("notifyOfflineToOnlineFriends: " + user.getFullname());
 					conn.sendMessage(notification);
 				}
 			}

@@ -1,5 +1,6 @@
 package mysql;
 
+import java.io.File;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -9,11 +10,15 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
+import javax.activation.MimetypesFileTypeMap;
+import org.json.JSONObject;
+
 import pojo.Group;
 import pojo.Message;
 import pojo.Relationship;
 import pojo.User;
 import utils.DateTimeUtils;
+import utils.JSONUtils;
 
 public class ChatAppConnectorDB {
 
@@ -67,8 +72,14 @@ public class ChatAppConnectorDB {
 				String message = rs.getString(StructureDB.MESSAGE);
 				int userID = rs.getInt(StructureDB.MESSAGE_USER_ID);
 				boolean isFile = rs.getBoolean(StructureDB.MESSAGE_IS_FILE);
+				String sender = rs.getString(StructureDB.MESSAGE_SENDER);
 
-				Message msg = new Message(groupID, userID, message, isFile);
+				Message msg = new Message(groupID, userID, sender, message, isFile);
+
+				if (isFile && isImage(groupID, message)) {
+					File image = new File(getDirectorySaveFiles() + groupID);
+					msg.setImage(image);
+				}
 				result.add(msg);
 			}
 		} catch (SQLException e) {
@@ -77,6 +88,31 @@ public class ChatAppConnectorDB {
 		}
 
 		return result;
+	}
+
+	public boolean isImage(int groupId, String fileName) {
+		File folder = new File(getDirectorySaveFiles() + groupId);
+		if (folder.exists()) {
+			File[] listOfFiles = folder.listFiles();
+			for (File file : listOfFiles) {
+				if (file.isFile() && fileName.equals(file.getName())) {
+					String mimetype = new MimetypesFileTypeMap().getContentType(file);
+					String type = mimetype.split("/")[0];
+					if (type.equals("image"))
+						return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	public String getUserName() {
+		String username = System.getProperty("user.name");
+		return username;
+	}
+
+	private String getDirectorySaveFiles() {
+		return "C:\\Users\\" + getUserName() + "\\Documents\\" + "ChatApplication\\";
 	}
 
 	public List<Group> getListGroupsByID(String listGroupsIDStr) {
@@ -172,6 +208,27 @@ public class ChatAppConnectorDB {
 		return result;
 	}
 
+	public boolean isExistGroupName(Group group) {
+
+		PreparedStatement preStatement = null;
+		try {
+			preStatement = mConnection.prepareStatement(MySQLQuery.GET_ALL_GROUP);
+			ResultSet rs = preStatement.executeQuery();
+			while (rs.next()) {
+				String fullname = rs.getString(StructureDB.GROUP_NAME);
+				boolean isChatGroup = rs.getBoolean(StructureDB.GROUP_IS_CHAT_GROUP);
+
+				if (isChatGroup && group.getName().equals(fullname)) {
+					return true;
+				}
+			}
+			preStatement.close();
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+		return false;
+	}
+
 	public User getUser(int id) {
 		User result = null;
 		String query = "Select * from " + StructureDB.TABLE_USERS + " where " + StructureDB.USER_ID + " = " + id;
@@ -194,7 +251,7 @@ public class ChatAppConnectorDB {
 		Relationship result = null;
 		PreparedStatement preStatement = null;
 		try {
-			preStatement = mConnection.prepareStatement(MySQLQuery.GET_LIST_FRIENDS_BY_USERID);
+			preStatement = mConnection.prepareStatement(MySQLQuery.GET_RELATIONSHIP_BY_USERID);
 			preStatement.setInt(1, userId);
 			ResultSet rs = preStatement.executeQuery();
 			while (rs.next()) {
@@ -206,6 +263,8 @@ public class ChatAppConnectorDB {
 				List<Integer> listGroupsID = addAllIDs(groupsStr);
 
 				result = new Relationship(userId, listFriendsID, listGroupsID);
+				System.out.println(
+						"getRelationshipByUserID: " + result.getUserIDStr() + " - " + result.getListGroupsIDStr());
 			}
 			preStatement.close();
 		} catch (SQLException e) {
@@ -214,47 +273,19 @@ public class ChatAppConnectorDB {
 		return result;
 	}
 
-	public void updateStatusOnline(String username, boolean online) {
-		PreparedStatement preStatement = null;
-		try {
-			preStatement = mConnection.prepareStatement(MySQLQuery.UPDATE_STATUS_ONLINE);
-			preStatement.setInt(1, online ? 1 : 0);
-			preStatement.setString(2, username);
-			preStatement.executeUpdate();
-			preStatement.close();
-		} catch (SQLException ex) {
-			ex.printStackTrace();
-		} finally {
-			if (preStatement != null) {
-				try {
-					preStatement.close();
-				} catch (SQLException e) {
-					e.printStackTrace();
-				}
-			}
-		}
-	}
-
 	public boolean updateStatusOnline(int userId, boolean online) {
 		PreparedStatement preStatement = null;
 		try {
-			preStatement = mConnection.prepareStatement(MySQLQuery.UPDATE_STATUS_ONLINE_BY_USER_ID);
-			preStatement.setInt(1, online ? 1 : 0);
+			preStatement = mConnection.prepareStatement(MySQLQuery.UPDATE_STATUS_ONLINE);
+			preStatement.setInt(1, (online ? 1 : 0));
 			preStatement.setInt(2, userId);
 			preStatement.executeUpdate();
 			preStatement.close();
-			
+			System.out.println("updateStatusOnline: " + userId + " - " + online);
+
 			return true;
 		} catch (SQLException ex) {
 			ex.printStackTrace();
-		} finally {
-			if (preStatement != null) {
-				try {
-					preStatement.close();
-				} catch (SQLException e) {
-					e.printStackTrace();
-				}
-			}
 		}
 		return false;
 	}
@@ -282,15 +313,16 @@ public class ChatAppConnectorDB {
 		}
 	}
 
-	public void insertMessage(int groupId, int senderId, boolean isFile,String msg, Date date) {
+	public void insertMessage(int groupId, int senderId, String sender, boolean isFile, String msg, Date date) {
 		PreparedStatement preparedStatement = null;
 		try {
 			preparedStatement = mConnection.prepareStatement(MySQLQuery.INSERT_NEW_MESSAGE);
 			preparedStatement.setInt(1, groupId);
-			preparedStatement.setBoolean(2, isFile);
-			preparedStatement.setString(3, msg);
-			preparedStatement.setInt(4, senderId);
-			preparedStatement.setString(5, DateTimeUtils.formatDateToStringDB(date));
+			preparedStatement.setString(2, msg);
+			preparedStatement.setInt(3, senderId);
+			preparedStatement.setString(4, DateTimeUtils.formatDateToStringDB(date));
+			preparedStatement.setBoolean(5, isFile);
+			preparedStatement.setString(6, sender);
 
 			preparedStatement.executeUpdate();
 			preparedStatement.close();
@@ -333,6 +365,153 @@ public class ChatAppConnectorDB {
 		if (!idsStr.equals(""))
 			for (String e : idsStr.split(","))
 				result.add(Integer.parseInt(e));
+		return result;
+	}
+
+	public void insertRequestAddFriend(int userIdRequested, int userIdReceive) {
+		PreparedStatement preparedStatement = null;
+		try {
+			preparedStatement = mConnection.prepareStatement(MySQLQuery.INSERT_NEW_REQUEST);
+			preparedStatement.setInt(1, userIdRequested);
+			preparedStatement.setInt(2, userIdReceive);
+			preparedStatement.executeUpdate();
+			preparedStatement.close();
+		} catch (SQLException e1) {
+			e1.printStackTrace();
+		}
+	}
+
+	public int getGroupIdByGroupName(Group gr) {
+		PreparedStatement preparedStatement = null;
+		try {
+			preparedStatement = mConnection.prepareStatement(MySQLQuery.GET_GROUP_ID_BY_GROUP_NAME);
+			preparedStatement.setString(1, gr.getName());
+			ResultSet result = preparedStatement.executeQuery();
+			if (result.next()) {
+				return result.getInt(StructureDB.GROUP_ID);
+			}
+		} catch (SQLException ex) {
+			ex.printStackTrace();
+		}
+		return -1;
+	}
+
+	public int getGroupIdByListUsers(String listUserId) {
+		PreparedStatement preparedStatement = null;
+		try {
+			preparedStatement = mConnection.prepareStatement(MySQLQuery.GET_GROUP_ID_BY_LIST_USERS);
+			preparedStatement.setString(1, listUserId);
+			ResultSet result = preparedStatement.executeQuery();
+			if (result.next()) {
+				return result.getInt(StructureDB.GROUP_ID);
+			}
+		} catch (SQLException ex) {
+			ex.printStackTrace();
+		}
+		return -1;
+	}
+
+	public void updateRelationship(Relationship newRelationship) {
+		PreparedStatement preparedStatement = null;
+		try {
+			preparedStatement = mConnection.prepareStatement(MySQLQuery.UPDATE_RELATIONSHIP);
+			preparedStatement.setString(1, newRelationship.getUserIDStr());
+			preparedStatement.setString(2, newRelationship.getListGroupsIDStr());
+			preparedStatement.setInt(3, newRelationship.getUserID());
+			preparedStatement.executeUpdate();
+			preparedStatement.close();
+		} catch (SQLException ex) {
+			ex.printStackTrace();
+		}
+	}
+
+	public boolean deleteRequested(int userIdRequested, int userIdReceived) {
+		PreparedStatement preparedStatement = null;
+		try {
+			preparedStatement = mConnection.prepareStatement(MySQLQuery.DELETE_REQUESTED);
+			preparedStatement.setInt(1, userIdRequested);
+			preparedStatement.setInt(2, userIdReceived);
+			preparedStatement.executeUpdate();
+			preparedStatement.close();
+			return true;
+		} catch (SQLException e1) {
+			e1.printStackTrace();
+			return false;
+		}
+	}
+
+	public String getAllRequests(int userIdReceived) {
+		PreparedStatement preparedStatement = null;
+		List<User> users = new ArrayList<>();
+		try {
+			System.out.println(MySQLQuery.GET_ALL_REQUESTED);
+			preparedStatement = mConnection.prepareStatement(MySQLQuery.GET_ALL_REQUESTED);
+			preparedStatement.setInt(1, userIdReceived);
+			ResultSet result = preparedStatement.executeQuery();
+			while (result.next()) {
+				User user = new User(result.getInt(StructureDB.USER_ID), result.getString(StructureDB.USER_FULLNAME));
+				users.add(user);
+			}
+			if (users.size() > 0) {
+				JSONObject jsonObject = JSONUtils.createAllRequestUsetObject(users);
+				return jsonObject.toString();
+			} else {
+				return JSONUtils.createEmptyJSONObject().toString();
+			}
+		} catch (SQLException ex) {
+			ex.printStackTrace();
+		} finally {
+			if (preparedStatement != null) {
+				try {
+					preparedStatement.close();
+				} catch (SQLException e) {
+					e.printStackTrace();
+				}
+			}
+		}
+		return null;
+	}
+
+	public List<User> getAllUser(int mId) {
+		List<User> result = new ArrayList<>();
+		String friendIds = getFriendIds(mId);
+		System.out.println("getAllUser - friend_ids: " + friendIds);
+
+		PreparedStatement preStatement = null;
+		try {
+			preStatement = mConnection.prepareStatement(MySQLQuery.GET_ALL_USER);
+			ResultSet rs = preStatement.executeQuery();
+			while (rs.next()) {
+				int id = rs.getInt(StructureDB.USER_ID);
+				String fullname = rs.getString(StructureDB.USER_FULLNAME);
+				boolean online = rs.getBoolean(StructureDB.ONLINE);
+
+				if (!friendIds.contains("" + id) && id != mId) {
+					User user = new User(id, fullname, online);
+					result.add(user);
+				}
+			}
+			preStatement.close();
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+		return result;
+	}
+
+	private String getFriendIds(int mId) {
+		String result = "";
+		PreparedStatement preStatement = null;
+		try {
+			preStatement = mConnection.prepareStatement(MySQLQuery.GET_LIST_FRIEND_IDS_BY_USERID);
+			preStatement.setInt(1, mId);
+			ResultSet rs = preStatement.executeQuery();
+			while (rs.next()) {
+				result = rs.getString(StructureDB.RELATIONSHIP_LIST_FRIENDS);
+			}
+			preStatement.close();
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
 		return result;
 	}
 }
